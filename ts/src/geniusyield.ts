@@ -4,7 +4,7 @@
 import Exchange from './abstract/geniusyield.js';
 import { TICK_SIZE, PAD_WITH_ZERO } from './base/functions/number.js';
 import { InvalidOrder, InsufficientFunds, ExchangeNotAvailable, DDoSProtection, BadRequest, InvalidAddress, AuthenticationError } from './base/errors.js';
-import type { Market } from './base/types.js';
+import type { Market, Str, MarketInterface } from './base/types.js';
 
 // ---------------------------------------------------------------------------
 
@@ -13,6 +13,15 @@ import type { Market } from './base/types.js';
  * @augments Exchange
  */
 export default class geniusyield extends Exchange {
+    safeMarket (marketId: Str = undefined, market: Market = undefined, delimiter: Str = undefined, marketType: Str = undefined): MarketInterface {
+        const isOption = (marketId !== undefined) && ((marketId.indexOf ('-C') > -1) || (marketId.indexOf ('-P') > -1));
+        if (isOption && !(marketId in this.markets_by_id)) {
+            // handle expired option contracts
+            return this.createExpiredOptionMarket (marketId);
+        }
+        return super.safeMarket (marketId, market, delimiter, marketType);
+    }
+
     describe () {
         return this.deepExtend (super.describe (), {
             'id': 'geniusyield',
@@ -33,17 +42,17 @@ export default class geniusyield extends Exchange {
                 'option': false,
                 'addMargin': false,
                 'cancelAllOrders': false,
-                'cancelOrder': false,
+                'cancelOrder': true,
                 'cancelOrders': false,
                 'closeAllPositions': false,
                 'closePosition': false,
                 'createDepositAddress': false,
-                'createOrder': false,
+                'createOrder': true,
                 'createReduceOnlyOrder': false,
                 'createStopLimitOrder': false,
                 'createStopMarketOrder': false,
                 'createStopOrder': false,
-                'fetchBalance': false,
+                'fetchBalance': true,
                 'fetchBorrowRateHistories': false,
                 'fetchBorrowRateHistory': false,
                 'fetchClosedOrders': false,
@@ -73,7 +82,7 @@ export default class geniusyield extends Exchange {
                 'fetchOpenOrders': false,
                 'fetchOrder': false,
                 'fetchOrderBook': false,
-                'fetchOrders': false,
+                'fetchOrders': true,
                 'fetchPosition': false,
                 'fetchPositionHistory': false,
                 'fetchPositionMode': false,
@@ -111,8 +120,8 @@ export default class geniusyield extends Exchange {
             },
             'urls': {
                 'api': {
-                    'preprod': 'https://localhost:8082/v0/',
-                    'mainnet': 'https://localhost:8082/v0/',
+                    'preprod': 'http://localhost:8082',
+                    'mainnet': 'http://localhost:8082',
                 },
                 'www': 'https://www.geniusyield.co/',
                 'doc': [
@@ -126,10 +135,13 @@ export default class geniusyield extends Exchange {
                 },
                 'private': {
                     'get': {
-                        'markets': 0,
-                        'trading-fees': 0,
+                        'markets': 10,
+                        'trading-fees': 10,
                     },
                 },
+            },
+            'headers': {
+                'X-Gate-Channel-Id': 'ccxt',
             },
             'options': {
                 'defaultTimeInForce': 'utc',
@@ -246,5 +258,29 @@ export default class geniusyield extends Exchange {
             });
         }
         return result;
+    }
+
+    sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
+        const network = this.safeString (this.options, 'network', 'mainnet');
+        const version = this.safeString (this.options, 'version', 'v0');
+        let url = this.urls['api'][network] + '/' + version + '/' + path;
+        const keys = Object.keys (params);
+        const length = keys.length;
+        let query = undefined;
+        if (length > 0) {
+            if (method === 'GET') {
+                query = this.urlencode (params);
+                url = url + '?' + query;
+            } else {
+                body = this.json (params);
+            }
+        }
+        headers = {
+            'Content-Type': 'application/json',
+        };
+        if (this.apiKey !== undefined) {
+            headers['api-key'] = this.apiKey;
+        }
+        return { 'url': url, 'method': method, 'body': body, 'headers': headers };
     }
 }

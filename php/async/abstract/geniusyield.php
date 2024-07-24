@@ -8,15 +8,15 @@ namespace ccxt\async\abstract;
 
 abstract class geniusyield extends \ccxt\async\Exchange {
     public function private_get_markets($params = array()) {
-        return $this->request('markets', 'private', 'GET', $params, null, null, array("cost" => 0));
+        return $this->request('markets', 'private', 'GET', $params, null, null, array("cost" => 10));
     }
     public function private_get_trading_fees($params = array()) {
-        return $this->request('trading-fees', 'private', 'GET', $params, null, null, array("cost" => 0));
+        return $this->request('trading-fees', 'private', 'GET', $params, null, null, array("cost" => 10));
     }
     public function privateGetMarkets($params = array()) {
-        return $this->request('markets', 'private', 'GET', $params, null, null, array("cost" => 0));
+        return $this->request('markets', 'private', 'GET', $params, null, null, array("cost" => 10));
     }
     public function privateGetTradingFees($params = array()) {
-        return $this->request('trading-fees', 'private', 'GET', $params, null, null, array("cost" => 0));
+        return $this->request('trading-fees', 'private', 'GET', $params, null, null, array("cost" => 10));
     }
 }
