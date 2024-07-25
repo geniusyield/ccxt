@@ -4,7 +4,7 @@
 import Exchange from './abstract/geniusyield.js';
 import { TICK_SIZE, PAD_WITH_ZERO } from './base/functions/number.js';
 import { InvalidOrder, InsufficientFunds, ExchangeNotAvailable, DDoSProtection, BadRequest, InvalidAddress, AuthenticationError } from './base/errors.js';
-import type { Market, Str, MarketInterface } from './base/types.js';
+import type { Balances, Dict, Market, MarketInterface, Str } from './base/types.js';
 
 // ---------------------------------------------------------------------------
 
@@ -42,12 +42,12 @@ export default class geniusyield extends Exchange {
                 'option': false,
                 'addMargin': false,
                 'cancelAllOrders': false,
-                'cancelOrder': true,
+                'cancelOrder': false,
                 'cancelOrders': false,
                 'closeAllPositions': false,
                 'closePosition': false,
                 'createDepositAddress': false,
-                'createOrder': true,
+                'createOrder': false,
                 'createReduceOnlyOrder': false,
                 'createStopLimitOrder': false,
                 'createStopMarketOrder': false,
@@ -82,7 +82,7 @@ export default class geniusyield extends Exchange {
                 'fetchOpenOrders': false,
                 'fetchOrder': false,
                 'fetchOrderBook': false,
-                'fetchOrders': true,
+                'fetchOrders': false,
                 'fetchPosition': false,
                 'fetchPositionHistory': false,
                 'fetchPositionMode': false,
@@ -135,8 +135,10 @@ export default class geniusyield extends Exchange {
                 },
                 'private': {
                     'get': {
+                        'balances/{address}': 10,
                         'markets': 10,
                         'trading-fees': 10,
+                        'settings': 10,
                     },
                 },
             },
@@ -172,6 +174,7 @@ export default class geniusyield extends Exchange {
     }
 
     async fetchMarkets (params = {}): Promise<Market[]> {
+        this.checkRequiredCredentials ();
         /**
          * @method
          * @name geniusyield#fetchMarkets
@@ -260,21 +263,40 @@ export default class geniusyield extends Exchange {
         return result;
     }
 
+    parseBalance (response): Balances {
+        const result: Dict = {
+            'info': response,
+            'timestamp': undefined,
+            'datetime': undefined,
+        };
+        for (let i = 0; i < response.length; i++) {
+            const entry = response[i];
+            const currencyId = this.safeString (entry, 'asset');
+            const code = this.safeCurrencyCode (currencyId);
+            const account = this.account ();
+            account['total'] = this.safeString (entry, 'quantity');
+            account['free'] = this.safeString (entry, 'availableForTrade');
+            account['used'] = this.safeString (entry, 'locked');
+            result[code] = account;
+        }
+        return this.safeBalance (result);
+    }
+
+    async fetchBalance (params = {}): Promise<Balances> {
+        const settings = await this.privateGetSettings (params);
+        const address = this.safeString (settings, 'address');
+        const request: Dict = {
+            'address': address,
+        };
+        const balances = await this.privateGetBalancesAddress (this.extend (request, params));
+        return this.safeBalance (balances);
+    }
+
     sign (path, api = 'public', method = 'GET', params = {}, headers = undefined, body = undefined) {
+        this.checkRequiredCredentials ();
         const network = this.safeString (this.options, 'network', 'mainnet');
         const version = this.safeString (this.options, 'version', 'v0');
-        let url = this.urls['api'][network] + '/' + version + '/' + path;
-        const keys = Object.keys (params);
-        const length = keys.length;
-        let query = undefined;
-        if (length > 0) {
-            if (method === 'GET') {
-                query = this.urlencode (params);
-                url = url + '?' + query;
-            } else {
-                body = this.json (params);
-            }
-        }
+        const url = this.urls['api'][network] + '/' + version + '/' + this.implodeParams (path, params);
         headers = {
             'Content-Type': 'application/json',
         };

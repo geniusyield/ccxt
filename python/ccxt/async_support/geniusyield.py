@@ -5,7 +5,7 @@
 
 from ccxt.async_support.base.exchange import Exchange
 from ccxt.abstract.geniusyield import ImplicitAPI
-from ccxt.base.types import Market, MarketInterface, Str
+from ccxt.base.types import Balances, Market, MarketInterface, Str
 from typing import List
 from ccxt.base.errors import AuthenticationError
 from ccxt.base.errors import BadRequest
@@ -47,12 +47,12 @@ class geniusyield(Exchange, ImplicitAPI):
                 'option': False,
                 'addMargin': False,
                 'cancelAllOrders': False,
-                'cancelOrder': True,
+                'cancelOrder': False,
                 'cancelOrders': False,
                 'closeAllPositions': False,
                 'closePosition': False,
                 'createDepositAddress': False,
-                'createOrder': True,
+                'createOrder': False,
                 'createReduceOnlyOrder': False,
                 'createStopLimitOrder': False,
                 'createStopMarketOrder': False,
@@ -87,7 +87,7 @@ class geniusyield(Exchange, ImplicitAPI):
                 'fetchOpenOrders': False,
                 'fetchOrder': False,
                 'fetchOrderBook': False,
-                'fetchOrders': True,
+                'fetchOrders': False,
                 'fetchPosition': False,
                 'fetchPositionHistory': False,
                 'fetchPositionMode': False,
@@ -140,8 +140,10 @@ class geniusyield(Exchange, ImplicitAPI):
                 },
                 'private': {
                     'get': {
+                        'balances/{address}': 10,
                         'markets': 10,
                         'trading-fees': 10,
+                        'settings': 10,
                     },
                 },
             },
@@ -176,6 +178,7 @@ class geniusyield(Exchange, ImplicitAPI):
         })
 
     async def fetch_markets(self, params={}) -> List[Market]:
+        self.check_required_credentials()
         """
         retrieves data on all markets for geniusyield
         :see: https://api-docs-v3.geniusyield.io/#get-markets
@@ -260,19 +263,37 @@ class geniusyield(Exchange, ImplicitAPI):
             })
         return result
 
+    def parse_balance(self, response) -> Balances:
+        result: dict = {
+            'info': response,
+            'timestamp': None,
+            'datetime': None,
+        }
+        for i in range(0, len(response)):
+            entry = response[i]
+            currencyId = self.safe_string(entry, 'asset')
+            code = self.safe_currency_code(currencyId)
+            account = self.account()
+            account['total'] = self.safe_string(entry, 'quantity')
+            account['free'] = self.safe_string(entry, 'availableForTrade')
+            account['used'] = self.safe_string(entry, 'locked')
+            result[code] = account
+        return self.safe_balance(result)
+
+    async def fetch_balance(self, params={}) -> Balances:
+        settings = await self.privateGetSettings(params)
+        address = self.safe_string(settings, 'address')
+        request: dict = {
+            'address': address,
+        }
+        balances = await self.privateGetBalancesAddress(self.extend(request, params))
+        return self.safe_balance(balances)
+
     def sign(self, path, api='public', method='GET', params={}, headers=None, body=None):
+        self.check_required_credentials()
         network = self.safe_string(self.options, 'network', 'mainnet')
         version = self.safe_string(self.options, 'version', 'v0')
-        url = self.urls['api'][network] + '/' + version + '/' + path
-        keys = list(params.keys())
-        length = len(keys)
-        query = None
-        if length > 0:
-            if method == 'GET':
-                query = self.urlencode(params)
-                url = url + '?' + query
-            else:
-                body = self.json(params)
+        url = self.urls['api'][network] + '/' + version + '/' + self.implode_params(path, params)
         headers = {
             'Content-Type': 'application/json',
         }

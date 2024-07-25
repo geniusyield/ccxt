@@ -7,16 +7,28 @@ namespace ccxt\abstract;
 
 
 abstract class geniusyield extends \ccxt\Exchange {
+    public function private_get_balances_address($params = array()) {
+        return $this->request('balances/{address}', 'private', 'GET', $params, null, null, array("cost" => 10));
+    }
     public function private_get_markets($params = array()) {
         return $this->request('markets', 'private', 'GET', $params, null, null, array("cost" => 10));
     }
     public function private_get_trading_fees($params = array()) {
         return $this->request('trading-fees', 'private', 'GET', $params, null, null, array("cost" => 10));
     }
+    public function private_get_settings($params = array()) {
+        return $this->request('settings', 'private', 'GET', $params, null, null, array("cost" => 10));
+    }
+    public function privateGetBalancesAddress($params = array()) {
+        return $this->request('balances/{address}', 'private', 'GET', $params, null, null, array("cost" => 10));
+    }
     public function privateGetMarkets($params = array()) {
         return $this->request('markets', 'private', 'GET', $params, null, null, array("cost" => 10));
     }
     public function privateGetTradingFees($params = array()) {
         return $this->request('trading-fees', 'private', 'GET', $params, null, null, array("cost" => 10));
+    }
+    public function privateGetSettings($params = array()) {
+        return $this->request('settings', 'private', 'GET', $params, null, null, array("cost" => 10));
     }
 }

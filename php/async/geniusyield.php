@@ -41,12 +41,12 @@ class geniusyield extends Exchange {
                 'option' => false,
                 'addMargin' => false,
                 'cancelAllOrders' => false,
-                'cancelOrder' => true,
+                'cancelOrder' => false,
                 'cancelOrders' => false,
                 'closeAllPositions' => false,
                 'closePosition' => false,
                 'createDepositAddress' => false,
-                'createOrder' => true,
+                'createOrder' => false,
                 'createReduceOnlyOrder' => false,
                 'createStopLimitOrder' => false,
                 'createStopMarketOrder' => false,
@@ -81,7 +81,7 @@ class geniusyield extends Exchange {
                 'fetchOpenOrders' => false,
                 'fetchOrder' => false,
                 'fetchOrderBook' => false,
-                'fetchOrders' => true,
+                'fetchOrders' => false,
                 'fetchPosition' => false,
                 'fetchPositionHistory' => false,
                 'fetchPositionMode' => false,
@@ -134,8 +134,10 @@ class geniusyield extends Exchange {
                 ),
                 'private' => array(
                     'get' => array(
+                        'balances/{address}' => 10,
                         'markets' => 10,
                         'trading-fees' => 10,
+                        'settings' => 10,
                     ),
                 ),
             ),
@@ -172,6 +174,7 @@ class geniusyield extends Exchange {
 
     public function fetch_markets($params = array ()): PromiseInterface {
         return Async\async(function () use ($params) {
+            $this->check_required_credentials();
             /**
              * retrieves data on all $markets for geniusyield
              * @see https://api-docs-v3.geniusyield.io/#get-$markets
@@ -259,21 +262,42 @@ class geniusyield extends Exchange {
         }) ();
     }
 
+    public function parse_balance($response): array {
+        $result = array(
+            'info' => $response,
+            'timestamp' => null,
+            'datetime' => null,
+        );
+        for ($i = 0; $i < count($response); $i++) {
+            $entry = $response[$i];
+            $currencyId = $this->safe_string($entry, 'asset');
+            $code = $this->safe_currency_code($currencyId);
+            $account = $this->account();
+            $account['total'] = $this->safe_string($entry, 'quantity');
+            $account['free'] = $this->safe_string($entry, 'availableForTrade');
+            $account['used'] = $this->safe_string($entry, 'locked');
+            $result[$code] = $account;
+        }
+        return $this->safe_balance($result);
+    }
+
+    public function fetch_balance($params = array ()): PromiseInterface {
+        return Async\async(function () use ($params) {
+            $settings = Async\await($this->privateGetSettings ($params));
+            $address = $this->safe_string($settings, 'address');
+            $request = array(
+                'address' => $address,
+            );
+            $balances = Async\await($this->privateGetBalancesAddress ($this->extend($request, $params)));
+            return $this->safe_balance($balances);
+        }) ();
+    }
+
     public function sign($path, $api = 'public', $method = 'GET', $params = array (), $headers = null, $body = null) {
+        $this->check_required_credentials();
         $network = $this->safe_string($this->options, 'network', 'mainnet');
         $version = $this->safe_string($this->options, 'version', 'v0');
-        $url = $this->urls['api'][$network] . '/' . $version . '/' . $path;
-        $keys = is_array($params) ? array_keys($params) : array();
-        $length = count($keys);
-        $query = null;
-        if ($length > 0) {
-            if ($method === 'GET') {
-                $query = $this->urlencode($params);
-                $url = $url . '?' . $query;
-            } else {
-                $body = $this->json($params);
-            }
-        }
+        $url = $this->urls['api'][$network] . '/' . $version . '/' . $this->implode_params($path, $params);
         $headers = array(
             'Content-Type' => 'application/json',
         );

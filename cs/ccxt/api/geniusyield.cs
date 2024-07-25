@@ -11,6 +11,11 @@ public partial class geniusyield : Exchange
 {
     public geniusyield (object args = null): base(args) {}
 
+    public async Task<object> privateGetBalancesAddress (object parameters = null)
+    {
+        return await this.callAsync ("privateGetBalancesAddress",parameters);
+    }
+
     public async Task<object> privateGetMarkets (object parameters = null)
     {
         return await this.callAsync ("privateGetMarkets",parameters);
@@ -19,6 +24,11 @@ public partial class geniusyield : Exchange
     public async Task<object> privateGetTradingFees (object parameters = null)
     {
         return await this.callAsync ("privateGetTradingFees",parameters);
+    }
+
+    public async Task<object> privateGetSettings (object parameters = null)
+    {
+        return await this.callAsync ("privateGetSettings",parameters);
     }
 
 }
